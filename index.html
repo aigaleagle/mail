@@ -3,9 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Email Scheduler – Final</title>
-
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<title>Email Scheduler</title>
 
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -25,7 +23,7 @@ body{
   border-radius:20px;
   box-shadow:0 25px 60px rgba(0,0,0,.3);
 }
-h1{text-align:center;color:#667eea;margin-bottom:10px}
+h1{text-align:center;color:#667eea;margin-bottom:15px}
 label{font-weight:600}
 input,textarea{
   width:100%;
@@ -45,7 +43,6 @@ button{
 }
 button.secondary{background:#888}
 button.danger{background:#e74c3c}
-button:disabled{opacity:.5;cursor:not-allowed}
 .message{
   display:none;
   padding:10px;
@@ -70,7 +67,6 @@ button:disabled{opacity:.5;cursor:not-allowed}
 <div class="container">
 
 <h1>📧 Email Scheduler</h1>
-
 <div id="msg" class="message"></div>
 
 <form id="emailForm">
@@ -78,12 +74,6 @@ button:disabled{opacity:.5;cursor:not-allowed}
 
 <label>To</label>
 <input type="email" id="to" required>
-
-<label>CC (optional)</label>
-<input type="email" id="cc">
-
-<label>BCC (optional)</label>
-<input type="email" id="bcc">
 
 <label>Subject</label>
 <input type="text" id="subject" required>
@@ -97,7 +87,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 <label>Time</label>
 <input type="time" id="time" required>
 
-<button type="submit">Save / Schedule Email</button>
+<button type="submit">Schedule Email</button>
 <button type="button" class="secondary" onclick="resetForm()">Cancel</button>
 </form>
 
@@ -109,17 +99,11 @@ button:disabled{opacity:.5;cursor:not-allowed}
 </div>
 
 <script>
-/* ========= EMAILJS CONFIG ========= */
-emailjs.init('R3rLBCYDF0gnacqnL');   // PUBLIC KEY
-
-const SERVICE_ID  = 'service_21z6vxd';
-const TEMPLATE_ID = 'template_xeer9sh';
-/* ================================= */
-
-let emails = JSON.parse(localStorage.getItem("emails")) || [];
-
 const msgBox = document.getElementById("msg");
 const list = document.getElementById("emailList");
+const form = document.getElementById("emailForm");
+
+let emails = JSON.parse(localStorage.getItem("emails")) || [];
 
 function showMsg(text,type){
   msgBox.textContent=text;
@@ -128,116 +112,91 @@ function showMsg(text,type){
   setTimeout(()=>msgBox.style.display="none",4000);
 }
 
-function save(){
-  localStorage.setItem("emails",JSON.stringify(emails));
-}
+function save(){ localStorage.setItem("emails",JSON.stringify(emails)); }
 
 function resetForm(){
-  emailForm.reset();
+  form.reset();
   editIndex.value="";
 }
 
 function render(){
   list.innerHTML="";
-  if(emails.length===0){
-    list.innerHTML="<p>No emails scheduled</p>";
+  if(!emails.length){
+    list.innerHTML="<p>No scheduled emails</p>";
     return;
   }
-
   emails.forEach((e,i)=>{
     list.innerHTML+=`
-    <div class="email-item">
-      <b>To:</b> ${e.to}<br>
-      <b>Subject:</b> ${e.subject}<br>
-      <b>Scheduled:</b> ${e.date} ${e.time}<br>
-      <b>Status:</b> ${e.status === "sent" ? "✅ Sent" : "⏳ Pending"}
-      <div class="actions">
-        ${
-          e.status==="pending"
-          ? `<button onclick="editEmail(${i})">Edit</button>
-             <button class="danger" onclick="deleteEmail(${i})">Delete</button>`
-          : `<button disabled>Edit</button>
-             <button disabled class="danger">Delete</button>`
-        }
+      <div class="email-item">
+        <b>To:</b> ${e.to}<br>
+        <b>Subject:</b> ${e.subject}<br>
+        <b>Time:</b> ${e.date} ${e.time}<br>
+        <b>Status:</b> ${e.status==="sent"?"✅ Sent":"⏳ Pending"}
+        <div class="actions">
+          ${
+            e.status==="pending"
+            ? `<button onclick="deleteEmail(${i})" class="danger">Delete</button>`
+            : `<button disabled class="danger">Delete</button>`
+          }
+        </div>
       </div>
-    </div>`;
+    `;
   });
-}
-
-function editEmail(i){
-  if(emails[i].status==="sent"){
-    showMsg("Sent emails cannot be edited ❌","error");
-    return;
-  }
-  const e=emails[i];
-  to.value=e.to;
-  cc.value=e.cc||"";
-  bcc.value=e.bcc||"";
-  subject.value=e.subject;
-  message.value=e.message;
-  date.value=e.date;
-  time.value=e.time;
-  editIndex.value=i;
 }
 
 function deleteEmail(i){
   if(emails[i].status==="sent"){
-    showMsg("Sent emails cannot be deleted ❌","error");
+    showMsg("Sent emails cannot be deleted","error");
     return;
   }
-  if(confirm("Delete this scheduled email?")){
-    emails.splice(i,1);
-    save();
-    render();
-  }
+  emails.splice(i,1);
+  save();
+  render();
 }
 
 function sendEmail(e){
-  emailjs.send(SERVICE_ID, TEMPLATE_ID, {
-    to_email: e.to,
-    cc_email: e.cc,
-    bcc_email: e.bcc,
-    sender_name: "A S Shridatta Aigal",
-    name: e.subject,
-    message: e.message
-  }).then(()=>{
+  fetch("/api/sendMail",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      to_email:e.to,
+      subject:e.subject,
+      message:e.message,
+      sender_name:"A S Shridatta Aigal"
+    })
+  })
+  .then(res=>res.json())
+  .then(()=>{
     e.status="sent";
     save();
     render();
     showMsg("Email sent successfully ✅","success");
-  }).catch(()=>{
+  })
+  .catch(()=>{
     showMsg("Email sending failed ❌","error");
   });
 }
 
 function checkEmails(){
-  const now=new Date();
+  const now = new Date();
   emails.forEach(e=>{
     if(e.status==="pending"){
-      const t=new Date(`${e.date}T${e.time}`);
+      const t = new Date(`${e.date}T${e.time}`);
       if(now>=t) sendEmail(e);
     }
   });
 }
 
-emailForm.addEventListener("submit",ev=>{
+form.addEventListener("submit",ev=>{
   ev.preventDefault();
-
-  const data={
+  emails.push({
     to:to.value,
-    cc:cc.value,
-    bcc:bcc.value,
     subject:subject.value,
     message:message.value,
     date:date.value,
     time:time.value,
     status:"pending"
-  };
-
-  const idx=editIndex.value;
-  if(idx==="") emails.unshift(data);
-  else emails[idx]=data;
-
+  });
   save();
   render();
   resetForm();
@@ -248,6 +207,5 @@ setInterval(checkEmails,30000);
 render();
 checkEmails();
 </script>
-
 </body>
 </html>
