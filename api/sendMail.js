@@ -1,0 +1,24 @@
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  try {
+    const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service_id: process.env.SERVICE_ID,
+        template_id: process.env.TEMPLATE_ID,
+        user_id: process.env.PUBLIC_KEY,
+        template_params: req.body
+      })
+    });
+
+    if (!response.ok) throw new Error("EmailJS failed");
+
+    res.status(200).json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: "Email sending failed" });
+  }
+}
