@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Email Scheduler – Final</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:system-ui,Arial;
+  background:linear-gradient(135deg,#667eea,#764ba2);
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+.container{
+  background:#fff;
+  max-width:760px;
+  width:100%;
+  padding:30px;
+  border-radius:20px;
+  box-shadow:0 25px 60px rgba(0,0,0,.3);
+}
+h1{text-align:center;color:#667eea;margin-bottom:10px}
+label{font-weight:600}
+input,textarea{
+  width:100%;
+  padding:12px;
+  margin:6px 0 14px;
+  border-radius:10px;
+  border:2px solid #ddd;
+}
+textarea{min-height:100px}
+button{
+  padding:10px 16px;
+  border:none;
+  border-radius:8px;
+  background:#667eea;
+  color:#fff;
+  cursor:pointer;
+}
+button.secondary{background:#888}
+button.danger{background:#e74c3c}
+button:disabled{opacity:.5;cursor:not-allowed}
+.message{
+  display:none;
+  padding:10px;
+  border-radius:8px;
+  margin-bottom:12px;
+  color:#fff;
+}
+.success{background:#2ecc71}
+.error{background:#e74c3c}
+.email-item{
+  background:#f4f7fb;
+  padding:15px;
+  border-radius:12px;
+  margin-bottom:10px;
+}
+.actions{margin-top:8px}
+.actions button{margin-right:6px}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>📧 Email Scheduler</h1>
+
+<div id="msg" class="message"></div>
+
+<form id="emailForm">
+<input type="hidden" id="editIndex">
+
+<label>To</label>
+<input type="email" id="to" required>
+
+<label>CC (optional)</label>
+<input type="email" id="cc">
+
+<label>BCC (optional)</label>
+<input type="email" id="bcc">
+
+<label>Subject</label>
+<input type="text" id="subject" required>
+
+<label>Message</label>
+<textarea id="message" required></textarea>
+
+<label>Date</label>
+<input type="date" id="date" required>
+
+<label>Time</label>
+<input type="time" id="time" required>
+
+<button type="submit">Save / Schedule Email</button>
+<button type="button" class="secondary" onclick="resetForm()">Cancel</button>
+</form>
+
+<hr style="margin:20px 0">
+
+<h3>Scheduled Emails</h3>
+<div id="emailList"></div>
+
+</div>
+
+<script>
+/* ========= EMAILJS CONFIG ========= */
+emailjs.init('R3rLBCYDF0gnacqnL');   // PUBLIC KEY
+
+const SERVICE_ID  = 'service_21z6vxd';
+const TEMPLATE_ID = 'template_xeer9sh';
+/* ================================= */
+
+let emails = JSON.parse(localStorage.getItem("emails")) || [];
+
+const msgBox = document.getElementById("msg");
+const list = document.getElementById("emailList");
+
+function showMsg(text,type){
+  msgBox.textContent=text;
+  msgBox.className="message "+type;
+  msgBox.style.display="block";
+  setTimeout(()=>msgBox.style.display="none",4000);
+}
+
+function save(){
+  localStorage.setItem("emails",JSON.stringify(emails));
+}
+
+function resetForm(){
+  emailForm.reset();
+  editIndex.value="";
+}
+
+function render(){
+  list.innerHTML="";
+  if(emails.length===0){
+    list.innerHTML="<p>No emails scheduled</p>";
+    return;
+  }
+
+  emails.forEach((e,i)=>{
+    list.innerHTML+=`
+    <div class="email-item">
+      <b>To:</b> ${e.to}<br>
+      <b>Subject:</b> ${e.subject}<br>
+      <b>Scheduled:</b> ${e.date} ${e.time}<br>
+      <b>Status:</b> ${e.status === "sent" ? "✅ Sent" : "⏳ Pending"}
+      <div class="actions">
+        ${
+          e.status==="pending"
+          ? `<button onclick="editEmail(${i})">Edit</button>
+             <button class="danger" onclick="deleteEmail(${i})">Delete</button>`
+          : `<button disabled>Edit</button>
+             <button disabled class="danger">Delete</button>`
+        }
+      </div>
+    </div>`;
+  });
+}
+
+function editEmail(i){
+  if(emails[i].status==="sent"){
+    showMsg("Sent emails cannot be edited ❌","error");
+    return;
+  }
+  const e=emails[i];
+  to.value=e.to;
+  cc.value=e.cc||"";
+  bcc.value=e.bcc||"";
+  subject.value=e.subject;
+  message.value=e.message;
+  date.value=e.date;
+  time.value=e.time;
+  editIndex.value=i;
+}
+
+function deleteEmail(i){
+  if(emails[i].status==="sent"){
+    showMsg("Sent emails cannot be deleted ❌","error");
+    return;
+  }
+  if(confirm("Delete this scheduled email?")){
+    emails.splice(i,1);
+    save();
+    render();
+  }
+}
+
+function sendEmail(e){
+  emailjs.send(SERVICE_ID, TEMPLATE_ID, {
+    to_email: e.to,
+    cc_email: e.cc,
+    bcc_email: e.bcc,
+    sender_name: "A S Shridatta Aigal",
+    name: e.subject,
+    message: e.message
+  }).then(()=>{
+    e.status="sent";
+    save();
+    render();
+    showMsg("Email sent successfully ✅","success");
+  }).catch(()=>{
+    showMsg("Email sending failed ❌","error");
+  });
+}
+
+function checkEmails(){
+  const now=new Date();
+  emails.forEach(e=>{
+    if(e.status==="pending"){
+      const t=new Date(`${e.date}T${e.time}`);
+      if(now>=t) sendEmail(e);
+    }
+  });
+}
+
+emailForm.addEventListener("submit",ev=>{
+  ev.preventDefault();
+
+  const data={
+    to:to.value,
+    cc:cc.value,
+    bcc:bcc.value,
+    subject:subject.value,
+    message:message.value,
+    date:date.value,
+    time:time.value,
+    status:"pending"
+  };
+
+  const idx=editIndex.value;
+  if(idx==="") emails.unshift(data);
+  else emails[idx]=data;
+
+  save();
+  render();
+  resetForm();
+  showMsg("Email scheduled 🎯","success");
+});
+
+setInterval(checkEmails,30000);
+render();
+checkEmails();
+</script>
+
+</body>
+</html>
