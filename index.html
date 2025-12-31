@@ -1,9 +1,13 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Email Scheduler</title>
+<title>Email Scheduler – Final</title>
+
+<!-- EmailJS SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -41,6 +45,9 @@ button{
   color:#fff;
   cursor:pointer;
 }
+button.secondary{background:#888}
+button.danger{background:#e74c3c}
+button:disabled{opacity:.5;cursor:not-allowed}
 .message{
   display:none;
   padding:10px;
@@ -56,6 +63,8 @@ button{
   border-radius:12px;
   margin-bottom:10px;
 }
+.actions{margin-top:8px}
+.actions button{margin-right:6px}
 </style>
 </head>
 
@@ -63,11 +72,20 @@ button{
 <div class="container">
 
 <h1>📧 Email Scheduler</h1>
+
 <div id="msg" class="message"></div>
 
 <form id="emailForm">
-<label>To</label>
+<input type="hidden" id="editIndex">
+
+<label>To Email</label>
 <input type="email" id="to" required>
+
+<label>CC (optional)</label>
+<input type="email" id="cc">
+
+<label>BCC (optional)</label>
+<input type="email" id="bcc">
 
 <label>Subject</label>
 <input type="text" id="subject" required>
@@ -82,17 +100,27 @@ button{
 <input type="time" id="time" required>
 
 <button type="submit">Schedule Email</button>
+<button type="button" class="secondary" onclick="resetForm()">Cancel</button>
 </form>
 
 <hr style="margin:20px 0">
+
+<h3>Scheduled Emails</h3>
 <div id="emailList"></div>
 
 </div>
 
 <script>
+/* ================= EMAILJS CONFIG ================= */
+emailjs.init("R3rLBCYDF0gnacqnL"); // PUBLIC KEY
+const SERVICE_ID  = "service_21z6vxd";
+const TEMPLATE_ID = "template_xeer9sh";
+/* ================================================= */
+
 let emails = JSON.parse(localStorage.getItem("emails")) || [];
-const list = document.getElementById("emailList");
+
 const msgBox = document.getElementById("msg");
+const list   = document.getElementById("emailList");
 
 function showMsg(text,type){
   msgBox.textContent=text;
@@ -101,63 +129,100 @@ function showMsg(text,type){
   setTimeout(()=>msgBox.style.display="none",4000);
 }
 
-function save(){localStorage.setItem("emails",JSON.stringify(emails));}
+function save(){
+  localStorage.setItem("emails",JSON.stringify(emails));
+}
+
+function resetForm(){
+  emailForm.reset();
+  editIndex.value="";
+}
 
 function render(){
   list.innerHTML="";
-  emails.forEach(e=>{
+  if(emails.length===0){
+    list.innerHTML="<p>No emails scheduled</p>";
+    return;
+  }
+
+  emails.forEach((e,i)=>{
     list.innerHTML+=`
       <div class="email-item">
         <b>To:</b> ${e.to}<br>
         <b>Subject:</b> ${e.subject}<br>
-        <b>Status:</b> ${e.status}
-      </div>`;
+        <b>Scheduled:</b> ${e.date} ${e.time}<br>
+        <b>Status:</b> ${e.status==="sent"?"✅ Sent":"⏳ Pending"}
+        <div class="actions">
+          ${
+            e.status==="pending"
+            ? `<button class="danger" onclick="deleteEmail(${i})">Delete</button>`
+            : `<button class="danger" disabled>Delete</button>`
+          }
+        </div>
+      </div>
+    `;
   });
 }
 
+function deleteEmail(i){
+  if(emails[i].status==="sent"){
+    showMsg("Sent emails cannot be deleted","error");
+    return;
+  }
+  emails.splice(i,1);
+  save();
+  render();
+}
+
 function sendEmail(e){
-  fetch("/api/sendMail",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({
-      to_email:e.to,
-      subject:e.subject,
-      message:e.message,
-      sender_name:"A S Shridatta Aigal"
-    })
+  emailjs.send(SERVICE_ID, TEMPLATE_ID, {
+    to_email:  e.to,
+    cc_email:  e.cc || "",
+    bcc_email: e.bcc || "",
+    name:      e.subject,
+    message:   e.message
   })
-  .then(r=>r.json())
   .then(()=>{
     e.status="sent";
-    save(); render();
-    showMsg("Email sent ✅","success");
+    save();
+    render();
+    showMsg("Email sent successfully ✅","success");
   })
-  .catch(()=>{
-    showMsg("Email failed ❌","error");
+  .catch(err=>{
+    console.error(err);
+    showMsg("Email sending failed ❌","error");
   });
 }
 
 function checkEmails(){
-  const now=new Date();
+  const now = new Date();
   emails.forEach(e=>{
     if(e.status==="pending"){
-      const t=new Date(`${e.date}T${e.time}`);
-      if(now>=t) sendEmail(e);
+      const scheduled = new Date(`${e.date}T${e.time}`);
+      if(now >= scheduled){
+        sendEmail(e);
+      }
     }
   });
 }
 
 emailForm.addEventListener("submit",ev=>{
   ev.preventDefault();
+
   emails.push({
     to:to.value,
+    cc:cc.value,
+    bcc:bcc.value,
     subject:subject.value,
     message:message.value,
     date:date.value,
     time:time.value,
     status:"pending"
   });
-  save(); render();
+
+  save();
+  render();
+  resetForm();
   showMsg("Email scheduled 🎯","success");
 });
 
