@@ -23,7 +23,7 @@ body{
   border-radius:20px;
   box-shadow:0 25px 60px rgba(0,0,0,.3);
 }
-h1{text-align:center;color:#667eea;margin-bottom:15px}
+h1{text-align:center;color:#667eea;margin-bottom:10px}
 label{font-weight:600}
 input,textarea{
   width:100%;
@@ -41,8 +41,6 @@ button{
   color:#fff;
   cursor:pointer;
 }
-button.secondary{background:#888}
-button.danger{background:#e74c3c}
 .message{
   display:none;
   padding:10px;
@@ -58,8 +56,6 @@ button.danger{background:#e74c3c}
   border-radius:12px;
   margin-bottom:10px;
 }
-.actions{margin-top:8px}
-.actions button{margin-right:6px}
 </style>
 </head>
 
@@ -70,8 +66,6 @@ button.danger{background:#e74c3c}
 <div id="msg" class="message"></div>
 
 <form id="emailForm">
-<input type="hidden" id="editIndex">
-
 <label>To</label>
 <input type="email" id="to" required>
 
@@ -88,22 +82,17 @@ button.danger{background:#e74c3c}
 <input type="time" id="time" required>
 
 <button type="submit">Schedule Email</button>
-<button type="button" class="secondary" onclick="resetForm()">Cancel</button>
 </form>
 
 <hr style="margin:20px 0">
-
-<h3>Scheduled Emails</h3>
 <div id="emailList"></div>
 
 </div>
 
 <script>
-const msgBox = document.getElementById("msg");
-const list = document.getElementById("emailList");
-const form = document.getElementById("emailForm");
-
 let emails = JSON.parse(localStorage.getItem("emails")) || [];
+const list = document.getElementById("emailList");
+const msgBox = document.getElementById("msg");
 
 function showMsg(text,type){
   msgBox.textContent=text;
@@ -112,52 +101,24 @@ function showMsg(text,type){
   setTimeout(()=>msgBox.style.display="none",4000);
 }
 
-function save(){ localStorage.setItem("emails",JSON.stringify(emails)); }
-
-function resetForm(){
-  form.reset();
-  editIndex.value="";
-}
+function save(){localStorage.setItem("emails",JSON.stringify(emails));}
 
 function render(){
   list.innerHTML="";
-  if(!emails.length){
-    list.innerHTML="<p>No scheduled emails</p>";
-    return;
-  }
-  emails.forEach((e,i)=>{
+  emails.forEach(e=>{
     list.innerHTML+=`
       <div class="email-item">
         <b>To:</b> ${e.to}<br>
         <b>Subject:</b> ${e.subject}<br>
-        <b>Time:</b> ${e.date} ${e.time}<br>
-        <b>Status:</b> ${e.status==="sent"?"✅ Sent":"⏳ Pending"}
-        <div class="actions">
-          ${
-            e.status==="pending"
-            ? `<button onclick="deleteEmail(${i})" class="danger">Delete</button>`
-            : `<button disabled class="danger">Delete</button>`
-          }
-        </div>
-      </div>
-    `;
+        <b>Status:</b> ${e.status}
+      </div>`;
   });
-}
-
-function deleteEmail(i){
-  if(emails[i].status==="sent"){
-    showMsg("Sent emails cannot be deleted","error");
-    return;
-  }
-  emails.splice(i,1);
-  save();
-  render();
 }
 
 function sendEmail(e){
   fetch("/api/sendMail",{
     method:"POST",
-    headers:{"Content-Type":"application/json"},
+    headers:{ "Content-Type":"application/json" },
     body:JSON.stringify({
       to_email:e.to,
       subject:e.subject,
@@ -165,29 +126,28 @@ function sendEmail(e){
       sender_name:"A S Shridatta Aigal"
     })
   })
-  .then(res=>res.json())
+  .then(r=>r.json())
   .then(()=>{
     e.status="sent";
-    save();
-    render();
-    showMsg("Email sent successfully ✅","success");
+    save(); render();
+    showMsg("Email sent ✅","success");
   })
   .catch(()=>{
-    showMsg("Email sending failed ❌","error");
+    showMsg("Email failed ❌","error");
   });
 }
 
 function checkEmails(){
-  const now = new Date();
+  const now=new Date();
   emails.forEach(e=>{
     if(e.status==="pending"){
-      const t = new Date(`${e.date}T${e.time}`);
+      const t=new Date(`${e.date}T${e.time}`);
       if(now>=t) sendEmail(e);
     }
   });
 }
 
-form.addEventListener("submit",ev=>{
+emailForm.addEventListener("submit",ev=>{
   ev.preventDefault();
   emails.push({
     to:to.value,
@@ -197,15 +157,13 @@ form.addEventListener("submit",ev=>{
     time:time.value,
     status:"pending"
   });
-  save();
-  render();
-  resetForm();
+  save(); render();
   showMsg("Email scheduled 🎯","success");
 });
 
 setInterval(checkEmails,30000);
 render();
-checkEmails();
 </script>
+
 </body>
 </html>
