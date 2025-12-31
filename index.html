@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Email Scheduler – Final</title>
 
-<!-- EmailJS SDK -->
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 
 <style>
@@ -78,7 +76,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 <form id="emailForm">
 <input type="hidden" id="editIndex">
 
-<label>To Email</label>
+<label>To</label>
 <input type="email" id="to" required>
 
 <label>CC (optional)</label>
@@ -99,7 +97,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
 <label>Time</label>
 <input type="time" id="time" required>
 
-<button type="submit">Schedule Email</button>
+<button type="submit">Save / Schedule Email</button>
 <button type="button" class="secondary" onclick="resetForm()">Cancel</button>
 </form>
 
@@ -111,21 +109,22 @@ button:disabled{opacity:.5;cursor:not-allowed}
 </div>
 
 <script>
-/* ================= EMAILJS CONFIG ================= */
-emailjs.init("R3rLBCYDF0gnacqnL"); // PUBLIC KEY
-const SERVICE_ID  = "service_21z6vxd";
-const TEMPLATE_ID = "template_xeer9sh";
-/* ================================================= */
+/* ========= EMAILJS CONFIG ========= */
+emailjs.init('R3rLBCYDF0gnacqnL');   // PUBLIC KEY
+const SERVICE_ID  = 'service_21z6vxd';
+const TEMPLATE_ID = 'template_xeer9sh';
+/* ================================= */
 
 let emails = JSON.parse(localStorage.getItem("emails")) || [];
 
 const msgBox = document.getElementById("msg");
-const list   = document.getElementById("emailList");
+const list = document.getElementById("emailList");
 
+/* ---------- UTILITIES ---------- */
 function showMsg(text,type){
-  msgBox.textContent=text;
-  msgBox.className="message "+type;
-  msgBox.style.display="block";
+  msgBox.textContent = text;
+  msgBox.className = "message " + type;
+  msgBox.style.display = "block";
   setTimeout(()=>msgBox.style.display="none",4000);
 }
 
@@ -138,66 +137,97 @@ function resetForm(){
   editIndex.value="";
 }
 
+/* ---------- RENDER (NEWEST FIRST) ---------- */
 function render(){
-  list.innerHTML="";
-  if(emails.length===0){
-    list.innerHTML="<p>No emails scheduled</p>";
+  list.innerHTML = "";
+
+  if(emails.length === 0){
+    list.innerHTML = "<p>No emails scheduled</p>";
     return;
   }
 
   emails.forEach((e,i)=>{
-    list.innerHTML+=`
+    list.innerHTML += `
       <div class="email-item">
         <b>To:</b> ${e.to}<br>
         <b>Subject:</b> ${e.subject}<br>
         <b>Scheduled:</b> ${e.date} ${e.time}<br>
-        <b>Status:</b> ${e.status==="sent"?"✅ Sent":"⏳ Pending"}
+        <b>Status:</b> ${e.status}
         <div class="actions">
           ${
-            e.status==="pending"
-            ? `<button class="danger" onclick="deleteEmail(${i})">Delete</button>`
-            : `<button class="danger" disabled>Delete</button>`
+            e.status === "pending"
+            ? `<button onclick="editEmail(${i})">Edit</button>
+               <button class="danger" onclick="deleteEmail(${i})">Delete</button>`
+            : `<button disabled>Edit</button>
+               <button disabled class="danger">Delete</button>`
           }
         </div>
-      </div>
-    `;
+      </div>`;
   });
 }
 
-function deleteEmail(i){
-  if(emails[i].status==="sent"){
-    showMsg("Sent emails cannot be deleted","error");
+/* ---------- EDIT / DELETE ---------- */
+function editEmail(i){
+  if(emails[i].status !== "pending"){
+    showMsg("Cannot edit after sending ❌","error");
     return;
   }
-  emails.splice(i,1);
-  save();
-  render();
+  const e = emails[i];
+  to.value = e.to;
+  cc.value = e.cc || "";
+  bcc.value = e.bcc || "";
+  subject.value = e.subject;
+  message.value = e.message;
+  date.value = e.date;
+  time.value = e.time;
+  editIndex.value = i;
 }
 
+function deleteEmail(i){
+  if(emails[i].status !== "pending"){
+    showMsg("Cannot delete sent email ❌","error");
+    return;
+  }
+  if(confirm("Delete this scheduled email?")){
+    emails.splice(i,1);
+    save();
+    render();
+  }
+}
+
+/* ---------- SEND EMAIL ---------- */
 function sendEmail(e){
+  e.status = "sending";   // lock to avoid duplicates
+  save();
+  render();
+
   emailjs.send(SERVICE_ID, TEMPLATE_ID, {
-    to_email:  e.to,
-    cc_email:  e.cc || "",
-    bcc_email: e.bcc || "",
-    name:      e.subject,
-    message:   e.message
+    to_email: e.to,
+    cc_email: e.cc,
+    bcc_email: e.bcc,
+    sender_name: "A S Shridatta Aigal",
+    name: e.subject,
+    message: e.message
   })
   .then(()=>{
-    e.status="sent";
+    e.status = "sent";
     save();
     render();
     showMsg("Email sent successfully ✅","success");
   })
-  .catch(err=>{
-    console.error(err);
+  .catch(()=>{
+    e.status = "pending";
+    save();
+    render();
     showMsg("Email sending failed ❌","error");
   });
 }
 
+/* ---------- CHECK SCHEDULE ---------- */
 function checkEmails(){
   const now = new Date();
   emails.forEach(e=>{
-    if(e.status==="pending"){
+    if(e.status === "pending"){
       const scheduled = new Date(`${e.date}T${e.time}`);
       if(now >= scheduled){
         sendEmail(e);
@@ -206,19 +236,28 @@ function checkEmails(){
   });
 }
 
-emailForm.addEventListener("submit",ev=>{
+/* ---------- FORM SUBMIT ---------- */
+emailForm.addEventListener("submit", ev=>{
   ev.preventDefault();
 
-  emails.push({
-    to:to.value,
-    cc:cc.value,
-    bcc:bcc.value,
-    subject:subject.value,
-    message:message.value,
-    date:date.value,
-    time:time.value,
-    status:"pending"
-  });
+  const data = {
+    to: to.value,
+    cc: cc.value,
+    bcc: bcc.value,
+    subject: subject.value,
+    message: message.value,
+    date: date.value,
+    time: time.value,
+    status: "pending"
+  };
+
+  const idx = editIndex.value;
+
+  if(idx === ""){
+    emails.unshift(data);   // 🔝 NEW EMAIL ON TOP
+  } else {
+    emails[idx] = data;
+  }
 
   save();
   render();
@@ -226,8 +265,10 @@ emailForm.addEventListener("submit",ev=>{
   showMsg("Email scheduled 🎯","success");
 });
 
+/* ---------- INIT ---------- */
 setInterval(checkEmails,30000);
 render();
+checkEmails();
 </script>
 
 </body>
