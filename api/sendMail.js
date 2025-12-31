@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     if (!response.ok) throw new Error("EmailJS failed");
 
     res.status(200).json({ success: true });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Email sending failed" });
   }
 }
